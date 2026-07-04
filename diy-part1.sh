@@ -42,7 +42,7 @@ define Device/oray_x1_pro
   DEVICE_VENDOR := Oray
   DEVICE_MODEL := X1 Pro
   DEVICE_DTS := mt7981b-oray-x1-pro
-  SUPPORTED_DEVICES += cudy,tr3000-v1-ubootmod
+  SUPPORTED_DEVICES := oray,x1_pro cudy,tr3000-v1-ubootmod
   UBINIZE_OPTS := -E 5
   BLOCKSIZE := 128k
   PAGESIZE := 2048
