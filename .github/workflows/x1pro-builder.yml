@@ -47,14 +47,16 @@ env:
   UPLOAD_RELEASE: ${{ github.event.inputs.release || github.event.client_payload.release }}
   PRERELEASE: ${{ github.event.inputs.prerelease }}
   TZ: Asia/Shanghai
+  # 用环境变量传递日期，避免在 with: 块中 $(date) 无法展开
+  BUILD_DATE: ${{ format('{0}', github.run_id) }}  # 占位，将在 run 步骤中覆盖
 
 jobs:
   menuconfig:
-    name:  Menuconfig & Push
+    name: Menuconfig & Push
     if: github.event.inputs.ssh == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - name:  Check Runner
+      - name: Check Runner
         run: |
           echo "=== Runner CPU Info ==="
           nproc && lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket|CPU max|CPU min'
@@ -64,50 +66,50 @@ jobs:
           echo ""
           echo "=== 内存 ==="
           free -h
-      - name:  Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name:  Init Environment
+      - name: Init Environment
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends libncurses-dev build-essential git wget python3 bzip2 python3-pip
           sudo mkdir -p /workdir
           sudo chown $USER:$GROUPS /workdir
 
-      - name:  Clone source code
+      - name: Clone source code
         working-directory: /workdir
         run: |
           git clone $REPO_URL -b $REPO_BRANCH --single-branch --filter=blob:none openwrt
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-      - name:  Copy previous config if exists
+      - name: Copy previous config if exists
         run: |
           if [ -f "$GITHUB_WORKSPACE/${CONFIG_FILE}" ]; then
             cp -f "$GITHUB_WORKSPACE/${CONFIG_FILE}" /workdir/openwrt/.config
           fi
 
-      - name:  Load custom feeds
+      - name: Load custom feeds
         run: |
           [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
           chmod +x $DIY_P1_SH
           cd openwrt
           $GITHUB_WORKSPACE/$DIY_P1_SH
 
-      - name:  Update & Install feeds
+      - name: Update & Install feeds
         run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
 
-      - name:  Load custom configuration
+      - name: Load custom configuration
         run: |
           [ -e $CONFIG_FILE ] && cp -f $CONFIG_FILE openwrt/.config
           chmod +x $DIY_P2_SH
           cd openwrt
           $GITHUB_WORKSPACE/$DIY_P2_SH
 
-      - name:  SSH connection to Menuconfig
+      - name: SSH connection to Menuconfig
         uses: mxschmitt/action-tmate@v3
         timeout-minutes: 15
-          
-      - name:  Push config to main branch
+
+      - name: Push config to main branch
         run: |
           SRC="/workdir/openwrt/.config"
           DST="$GITHUB_WORKSPACE/${CONFIG_FILE}"
@@ -117,9 +119,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "$CONFIG_FILE"
-          
+
           CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          
+
           git diff --cached --quiet || (
             git commit -m "Update config: ${CONFIG_FILE}" || true
             git pull --rebase origin $CURRENT_BRANCH
@@ -127,13 +129,13 @@ jobs:
           )
 
   build:
-    name:  Build X1Pro Firmware
-    needs: menuconfig
-    if: always() && (needs.menuconfig.result == 'success' || needs.menuconfig.result == 'skipped')
+    name: Build X1Pro Firmware
+    # 不依赖 menuconfig，两个 job 完全独立
+    # ssh=true 时用户通过 tmate 改的 config 会被 push 到仓库，build 会拉到最新
     runs-on: ubuntu-24.04
-    
+
     steps:
-      - name:  Check Runner
+      - name: Check Runner
         run: |
           echo "=== Runner CPU Info ==="
           nproc && lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket|CPU max|CPU min'
@@ -143,10 +145,17 @@ jobs:
           echo ""
           echo "=== 内存 ==="
           free -h
-      - name:  Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name:  Free Disk Space
+      - name: Set BUILD_DATE env
+        # 必须在 run 步骤里设置，才能在后续 with: 块中通过 ${{ env.BUILD_DATE }} 引用
+        run: |
+          BUILD_DATE=$(date +'%Y%m%d')
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          echo "Build date: $BUILD_DATE"
+
+      - name: Free Disk Space
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: true
@@ -157,7 +166,7 @@ jobs:
           docker-images: true
           swap-storage: true
 
-      - name:  Init Environment
+      - name: Init Environment
         run: |
           sudo -E apt-get -qq update
           sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache clang cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gnutls-dev gperf help2man intltool libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses-dev libpython3-dev libreadline-dev libssl-dev libtool libyaml-dev libz-dev lld llvm lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-docutils python3-pyelftools qemu-utils re2c rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev zstd
@@ -166,7 +175,7 @@ jobs:
           sudo mkdir -p /workdir
           sudo chown $USER:$GROUPS /workdir
 
-      - name:  Clone source code
+      - name: Clone source code
         working-directory: /workdir
         run: |
           git clone $REPO_URL -b $REPO_BRANCH --single-branch --filter=blob:none openwrt
@@ -175,7 +184,7 @@ jobs:
           fi
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-      - name:  Setup ccache & DL cache
+      - name: Setup ccache & DL cache
         uses: actions/cache@v4
         with:
           path: |
@@ -185,14 +194,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-openwrt-x1pro-${{ env.REPO_BRANCH }}-
 
-      - name:  Configure ccache
+      - name: Configure ccache
         run: |
           ccache --set-config=max_size=$CCACHE_MAXSIZE
           ccache --set-config=cache_dir=$CCACHE_DIR
           ccache --set-config=compression=true
           ccache -z
 
-      - name:  Load feeds & DIY scripts
+      - name: Load feeds & DIY scripts
         run: |
           cd openwrt
           [ -e $GITHUB_WORKSPACE/$FEEDS_CONF ] && mv $GITHUB_WORKSPACE/$FEEDS_CONF feeds.conf.default
@@ -203,70 +212,116 @@ jobs:
           chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
           $GITHUB_WORKSPACE/$DIY_P2_SH
 
-      - name:  Compile Firmware
+      - name: Verify X1Pro DTS integration
+        run: |
+          echo "=== Checking DTS file ==="
+          ls -la target/linux/mediatek/files/arch/arm64/boot/dts/mediatek/mt7981b-oray-x1-pro.dts 2>/dev/null || echo "WARNING: DTS not found!"
+          echo ""
+          echo "=== Checking filogic.mk for oray_x1_pro ==="
+          grep -A 10 "oray_x1_pro" target/linux/mediatek/image/filogic.mk || echo "WARNING: oray_x1_pro not found in filogic.mk!"
+          echo ""
+          echo "=== DTS partition layout ==="
+          grep -A 2 "partition@" target/linux/mediatek/files/arch/arm64/boot/dts/mediatek/mt7981b-oray-x1-pro.dts || true
+
+      - name: Compile Firmware
         id: compile
         run: |
           cd /workdir/openwrt
 
           cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
           make defconfig
+
+          # 确认 oray_x1_pro 在 defconfig 后仍然在 image Makefile 中
+          grep -q "oray_x1_pro" target/linux/mediatek/image/filogic.mk && echo "✓ oray_x1_pro found in filogic.mk" || echo "✗ oray_x1_pro NOT found!"
+
           make download -j$(nproc)
 
           if ! make -j$(nproc) CC="ccache gcc" CXX="ccache g++"; then
-            echo " Multi-threaded failed, retrying single-threaded..."
+            echo "Multi-threaded failed, retrying single-threaded..."
             make -j1 V=s || exit 1
           fi
 
-          echo " X1Pro build finished."
+          echo "X1Pro build finished."
           df -hT /workdir
           echo "status=success" >> $GITHUB_OUTPUT
 
-      - name:  Upload Binaries (Artifacts)
+          # 列出编译产物，用于调试
+          echo "=== Build artifacts ==="
+          find bin/targets -type f 2>/dev/null || echo "No bin/targets found!"
+
+      - name: List build artifacts (debug)
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          echo "=== Artifacts that will be uploaded ==="
+          ls -lh openwrt/bin/targets/mediatek/filogic/ 2>/dev/null || ls -lhR openwrt/bin/targets/ 2>/dev/null || echo "No targets found"
+          echo ""
+          echo "=== Full targets path ==="
+          find openwrt/bin/targets -type f -name "*.bin" -o -name "*.fit" -o -name "*.tar" 2>/dev/null
+
+      - name: Upload Binaries (Artifacts)
         uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success'
         with:
-          name: ImmortalWrt_X1Pro-${{ env.REPO_BRANCH }}-$(date +'%Y%m%d')
-          path: openwrt/bin/targets/*/*
+          # BUG FIX: 使用 env.BUILD_DATE 而不是 $(date) shell 语法
+          name: ImmortalWrt_X1Pro-openwrt-24.10-6.6-${{ env.BUILD_DATE }}
+          path: openwrt/bin/targets/mediatek/filogic/*
+          # 如果上面的精确路径不存在，fallback 到通配符
+          # path: openwrt/bin/targets/*/*
 
-      - name:  Generate Release Tag
+      - name: Generate Release Tag
         id: tag
         if: steps.compile.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true'
         run: |
           BUILD_TIME=$(date +"%Y%m%d-%H%M")
           RELEASE_TAG="ImmortalWrt-X1Pro-${BUILD_TIME}"
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Release tag: $RELEASE_TAG"
 
           cat > release.txt << EOF
-          ##  ImmortalWrt X1Pro Firmware Release
+          ## ImmortalWrt X1Pro Firmware Release
 
-          ** Release:** $RELEASE_TAG
-          ** Branch:** $REPO_BRANCH
-          ** Device:** Oray X1 Pro
-          ** Build Date:** $(date +"%Y-%m-%d %H:%M:%S")
-          ** Compiler:** GCC with ccache
+          **Release:** $RELEASE_TAG
+          **Branch:** $REPO_BRANCH
+          **Device:** Oray X1 Pro (ubootmod, 112M UBI)
+          **Build Date:** $(date +"%Y-%m-%d %H:%M:%S")
+          **Compiler:** GCC with ccache
 
-          ##  Download
+          ## Flash Layout (ubootmod 112M)
+
+          | Partition | Size  | Offset   |
+          |-----------|-------|----------|
+          | BL2       | 1024k | 0x0      |
+          | u-boot-env| 512k | 0x100000 |
+          | Factory   | 2048k | 0x180000 |
+          | FIP       | 2048k | 0x380000 |
+          | bdinfo    | 512k  | 0x580000 |
+          | kpanic   | 2048k | 0x600000 |
+          | ubi       | 114688k | 0x800000 |
+
+          ## Download
 
           Download the firmware files from the assets below.
+          Flash **sysupgrade.bin** via uboot web or sysupgrade.
 
           ---
 
-          Built with  using [GitHub Actions](https://github.com/features/actions)
+          Built with using [GitHub Actions](https://github.com/features/actions)
           EOF
 
           echo "status=success" >> $GITHUB_OUTPUT
 
-      - name:  Upload to Release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         if: steps.tag.outputs.status == 'success'
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
           prerelease: ${{ env.PRERELEASE == 'true' }}
-          files: openwrt/bin/targets/*/*
+          files: openwrt/bin/targets/mediatek/filogic/*
 
-      - name:  Delete old workflow runs
+      - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@v2
+        if: always()
         with:
           retain_days: 0
           keep_minimum_runs: 5
