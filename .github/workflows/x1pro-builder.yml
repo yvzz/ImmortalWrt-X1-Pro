@@ -235,13 +235,11 @@ jobs:
           # 确认 oray_x1_pro 在 defconfig 后仍然在 image Makefile 中
           grep -q "oray_x1_pro" target/linux/mediatek/image/filogic.mk && echo "✓ oray_x1_pro found in filogic.mk" || echo "✗ oray_x1_pro NOT found!"
 
-          # 跳过 ipk 包编译，只编译内核和固件镜像，大幅加速
-          sed -i 's/^# CONFIG_SKIP_PACKAGE_BUILD is not set/CONFIG_SKIP_PACKAGE_BUILD=y/' .config
-
           make download -j$(nproc)
 
-          # 只编译固件镜像，不编译 ipk 包
-          make -j$(nproc) world CONFIG_SKIP_PACKAGE_BUILD=y || make -j1 V=s || exit 1
+          # 跳过所有 ipk 包编译，只编译内核 + rootfs + sysupgrade.bin
+          sed -i 's/^# CONFIG_SKIP_PACKAGE_BUILD is not set/CONFIG_SKIP_PACKAGE_BUILD=y/' .config
+          make -j$(nproc) world || make -j1 V=s || exit 1
 
           echo "X1Pro build finished."
           df -hT /workdir
