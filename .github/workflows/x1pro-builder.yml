@@ -235,12 +235,13 @@ jobs:
           # 确认 oray_x1_pro 在 defconfig 后仍然在 image Makefile 中
           grep -q "oray_x1_pro" target/linux/mediatek/image/filogic.mk && echo "✓ oray_x1_pro found in filogic.mk" || echo "✗ oray_x1_pro NOT found!"
 
+          # 跳过 ipk 包编译，只编译内核和固件镜像，大幅加速
+          sed -i 's/^# CONFIG_SKIP_PACKAGE_BUILD is not set/CONFIG_SKIP_PACKAGE_BUILD=y/' .config
+
           make download -j$(nproc)
 
-          if ! make -j$(nproc) CC="ccache gcc" CXX="ccache g++"; then
-            echo "Multi-threaded failed, retrying single-threaded..."
-            make -j1 V=s || exit 1
-          fi
+          # 只编译固件镜像，不编译 ipk 包
+          make -j$(nproc) world CONFIG_SKIP_PACKAGE_BUILD=y || make -j1 V=s || exit 1
 
           echo "X1Pro build finished."
           df -hT /workdir
@@ -248,7 +249,7 @@ jobs:
 
           # 列出编译产物，用于调试
           echo "=== Build artifacts ==="
-          find bin/targets -type f 2>/dev/null || echo "No bin/targets found!"
+          find bin/targets -type f \( -name "*.bin" -o -name "*.tar" -o -name "*.fit" \) 2>/dev/null || echo "No firmware found!"
 
       - name: List build artifacts (debug)
         if: steps.compile.outputs.status == 'success'
