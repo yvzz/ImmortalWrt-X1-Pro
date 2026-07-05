@@ -66,34 +66,36 @@ import re
 
 patches = [
     # 02_network: add MAC setup for X1 Pro (from bdinfo@0xde00, same as TR3000)
+    #
+    # 注意：SUPPORTED_DEVICES 是 cudy,tr3000-v1-ubootmod，所以这里也用它
     (
         "target/linux/mediatek/filogic/base-files/etc/board.d/02_network",
         r'^(\tcudy,tr3000-v1\))$',
         lambda m: (
-            '\toray,x1_pro)\n'
+            '\tcudy,tr3000-v1-ubootmod)\n'
             '\t\twan_mac=$(mtd_get_mac_binary bdinfo 0xde00)\n'
             '\t\tlan_mac=$(macaddr_add "$wan_mac" 1)\n'
             '\t\t;;\n'
             '\n' + m.group(1)
         ),
     ),
-    # 11_fix_wifi_mac: add oray,x1_pro to the same handler group as Cudy TR3000
+    # 11_fix_wifi_mac: add cudy,tr3000-v1-ubootmod to the same handler group as Cudy TR3000
     (
         "target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac",
         r'^(\tcudy,m3000-v1\|\\)$',
-        lambda m: '\toray,x1_pro|\\\n' + m.group(1),
+        lambda m: '\tcudy,tr3000-v1-ubootmod|\\\n' + m.group(1),
     ),
     # 03_gpio_switches: no tabs in this file, match without leading \t
     (
         "target/linux/mediatek/filogic/base-files/etc/board.d/03_gpio_switches",
         r'^(cudy,tr3000-256mb-v1\|\\)$',
-        lambda m: 'oray,x1_pro|\\\n' + m.group(1),
+        lambda m: 'cudy,tr3000-v1-ubootmod|\\\n' + m.group(1),
     ),
     # preinit: set preinit interface for X1 Pro
     (
         "target/linux/mediatek/base-files/lib/preinit/05_set_preinit_iface",
         r'^(\tcudy,m3000-v1\|\\)$',
-        lambda m: '\toray,x1_pro|\\\n' + m.group(1),
+        lambda m: '\tcudy,tr3000-v1-ubootmod|\\\n' + m.group(1),
     ),
 ]
 
