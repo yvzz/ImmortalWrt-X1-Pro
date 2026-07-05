@@ -264,11 +264,9 @@ jobs:
         uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success'
         with:
-          # BUG FIX: 使用 env.BUILD_DATE 而不是 $(date) shell 语法
           name: ImmortalWrt_X1Pro-openwrt-24.10-6.6-${{ env.BUILD_DATE }}
-          path: openwrt/bin/targets/mediatek/filogic/*
-          # 如果上面的精确路径不存在，fallback 到通配符
-          # path: openwrt/bin/targets/*/*
+          path: |
+            openwrt/bin/targets/mediatek/filogic/*oray_x1_pro*-sysupgrade.bin
 
       - name: Generate Release Tag
         id: tag
