@@ -1,2 +1,56 @@
-429: Too Many Requests
-For more on scraping GitHub and how it may affect your rights, please review our Terms of Service (https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
+name: Delete Old Workflows
+
+on:
+  workflow_dispatch:
+    inputs:
+      enabled:
+        description: '启用清理'
+        required: true
+        type: boolean
+        default: false
+      retain_days:
+        description: '保留最近几天的成功 Workflow（填 0 删除全部）'
+        required: true
+        type: number
+        default: 1
+      include_cancelled:
+        description: '同时删除取消的 Workflow'
+        required: true
+        type: boolean
+        default: false
+  schedule:
+    - cron: 0 3 * * 0
+
+jobs:
+  Cleaning:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Delete Old Workflows By Days
+      if: ${{ inputs.enabled }}
+      uses: Mattraks/delete-workflow-runs@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        retain_days: ${{ inputs.retain_days }}
+        keep_minimum_runs: ${{ inputs.retain_days }}
+        delete_run_by_conclusion_pattern: ''
+
+    - name: Delete All Cancelled Workflows
+      if: ${{ inputs.enabled && inputs.include_cancelled }}
+      uses: Mattraks/delete-workflow-runs@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        retain_days: 0
+        keep_minimum_runs: 0
+        delete_run_by_conclusion_pattern: cancelled
+
+    - name: Delete Old Releases
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        KEEP=5
+        RELEASES=$(gh release list -R ${{ github.repository }} --limit 100 --json tagName,createdAt -q 'sort_by(.createdAt) | reverse | .['"$KEEP"':] | .[].tagName')
+        for tag in $RELEASES; do
+          echo "Deleting release: $tag"
+          gh release delete "$tag" -R ${{ github.repository }} --yes --cleanup-tag
+        done
