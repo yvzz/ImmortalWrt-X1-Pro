@@ -8,8 +8,8 @@ on:
         required: false
         type: boolean
         default: false
-  push:
-    branches: [ main, master ]
+  # push:
+  #   branches: [ main, master ]
 
 jobs:
   build:
