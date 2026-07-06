@@ -1,4 +1,4 @@
-name: Cleanup Orphan Tags
+name: Delete Old Tags
 
 on:
   workflow_dispatch:
