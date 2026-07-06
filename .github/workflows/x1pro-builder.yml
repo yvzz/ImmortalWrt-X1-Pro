@@ -26,6 +26,11 @@ on:
         required: false
         type: boolean
         default: false
+      verbose:
+        description: '启用详细编译日志 V=s（出错调试用）'
+        required: false
+        type: boolean
+        default: false
       release:
         description: '是否发布编译产物到 Release'
         required: false
@@ -50,8 +55,6 @@ env:
   UPLOAD_RELEASE: ${{ github.event.inputs.release || github.event.client_payload.release }}
   PRERELEASE: ${{ github.event.inputs.prerelease }}
   TZ: Asia/Shanghai
-  # 用环境变量传递日期，避免在 with: 块中 $(date) 无法展开
-  BUILD_DATE: ${{ format('{0}', github.run_id) }}  # 占位，将在 run 步骤中覆盖
 
 jobs:
   menuconfig:
@@ -64,18 +67,17 @@ jobs:
           echo "=== Runner CPU Info ==="
           nproc && lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket|CPU max|CPU min'
           echo ""
-          echo "=== /proc/cpuinfo (型号) ==="
-          cat /proc/cpuinfo | grep 'model name' | head -1
-          echo ""
           echo "=== 内存 ==="
           free -h
+
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Init Environment
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libncurses-dev build-essential git wget python3 bzip2 python3-pip
+          sudo apt-get install -y --no-install-recommends \
+            libncurses-dev build-essential git wget python3 bzip2 python3-pip
           sudo mkdir -p /workdir
           sudo chown $USER:$GROUPS /workdir
 
@@ -133,26 +135,21 @@ jobs:
 
   build:
     name: Build X1Pro Firmware
-    # 不依赖 menuconfig，两个 job 完全独立
-    # ssh=true 时用户通过 tmate 改的 config 会被 push 到仓库，build 会拉到最新
     runs-on: ubuntu-24.04
 
     steps:
       - name: Check Runner
         run: |
-          echo "=== Runner CPU Info ==="
-          nproc && lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket|CPU max|CPU min'
-          echo ""
-          echo "=== /proc/cpuinfo (型号) ==="
-          cat /proc/cpuinfo | grep 'model name' | head -1
-          echo ""
-          echo "=== 内存 ==="
-          free -h
+          echo "=== Runner Performance ==="
+          echo "CPU 型号: $(cat /proc/cpuinfo | grep 'model name' | head -1 | awk -F: '{print $2}')"
+          echo "CPU 核心数: $(nproc)"
+          echo "已安装内存: $(sudo lshw -short -C memory | grep GiB | head -1)"
+          echo "硬盘: $(ls /dev/sd* | grep -v [1-9] | wc -l) 块 $(df -hT / | tail -1 | awk '{print $3}')"
+
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Set BUILD_DATE env
-        # 必须在 run 步骤里设置，才能在后续 with: 块中通过 ${{ env.BUILD_DATE }} 引用
         run: |
           BUILD_DATE=$(date +'%Y%m%d')
           echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
@@ -169,10 +166,20 @@ jobs:
           docker-images: true
           swap-storage: true
 
-      - name: Init Environment
+      - name: Install dependencies
         run: |
-          sudo -E apt-get -qq update
-          sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache clang cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gnutls-dev gperf help2man intltool libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses-dev libpython3-dev libreadline-dev libssl-dev libtool libyaml-dev libz-dev lld llvm lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-docutils python3-pyelftools qemu-utils re2c rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev zstd
+          sudo apt-get update -qq
+          # 精简依赖：只装编译必需项，不装编辑器/ninja/msmtp等无关包
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gawk unzip file wget python3 \
+            python3-pip python3-setuptools python3-yaml \
+            rsync curl git \
+            libncurses-dev libssl-dev libelf-dev \
+            zlib1g-dev time subversion gettext patch perl \
+            libncurses-dev libssl-dev device-tree-compiler \
+            squashfs-tools \
+            python3-ply python3-docutils python3-pyelftools \
+            ccache
           pip3 install pyelftools --break-system-packages 2>/dev/null || true
           sudo timedatectl set-timezone "$TZ"
           sudo mkdir -p /workdir
@@ -219,47 +226,86 @@ jobs:
         run: |
           cd openwrt
           echo "=== Checking DTS file ==="
-          ls -la target/linux/mediatek/files/arch/arm64/boot/dts/mediatek/mt7981b-oray-x1-pro.dts 2>/dev/null || echo "WARNING: DTS not found!"
+          ls -la target/linux/mediatek/files/arch/arm64/boot/dts/mediatek/mt7981b-oray-x1-pro.dts \
+            2>/dev/null && echo "✓ DTS found" || echo "✗ WARNING: DTS not found!"
           echo ""
           echo "=== Checking filogic.mk for oray_x1_pro ==="
-          grep -A 10 "oray_x1_pro" target/linux/mediatek/image/filogic.mk || echo "WARNING: oray_x1_pro not found in filogic.mk!"
+          grep -A 10 "oray_x1_pro" target/linux/mediatek/image/filogic.mk \
+            && echo "✓ oray_x1_pro found" || echo "✗ WARNING: oray_x1_pro NOT found!"
           echo ""
           echo "=== DTS partition layout ==="
           grep -A 2 "partition@" target/linux/mediatek/files/arch/arm64/boot/dts/mediatek/mt7981b-oray-x1-pro.dts || true
 
-      - name: Compile Firmware
-        id: compile
+      - name: Configure Firmware
         run: |
-          cd /workdir/openwrt
-
+          cd openwrt
+          # 使用预先生成的完整配置（dev config 已在 config/X1Pro.config 中）
           cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
           make defconfig
 
-          # 确认 oray_x1_pro 在 defconfig 后仍然在 image Makefile 中
-          grep -q "oray_x1_pro" target/linux/mediatek/image/filogic.mk && echo "✓ oray_x1_pro found in filogic.mk" || echo "✗ oray_x1_pro NOT found!"
+          # 确保 oray_x1_pro 设备定义存在
+          if grep -q "oray_x1_pro" target/linux/mediatek/image/filogic.mk; then
+            echo "✓ oray_x1_pro found in filogic.mk"
+          else
+            echo "✗ oray_x1_pro NOT found in filogic.mk — build will likely fail!"
+          fi
 
+      - name: Compile Firmware
+        id: compile
+        run: |
+          cd openwrt
+
+          # 下载所有依赖（先完整下载，避免编译中途卡住）
           make download -j$(nproc)
 
-          # 跳过所有 ipk 包编译，只编译内核 + rootfs + sysupgrade.bin
-          sed -i 's/^# CONFIG_SKIP_PACKAGE_BUILD is not set/CONFIG_SKIP_PACKAGE_BUILD=y/' .config
-          make -j$(nproc) world || make -j1 V=s || exit 1
+          # 跳过 ipk 包编译，只编译内核 + rootfs + sysupgrade.bin
+          # 直接 echo 写入，不依赖 sed（避免注释行不匹配问题）
+          if grep -q "^# CONFIG_SKIP_PACKAGE_BUILD is not set$" .config; then
+            sed -i 's/^# CONFIG_SKIP_PACKAGE_BUILD is not set/CONFIG_SKIP_PACKAGE_BUILD=y/' .config
+          elif ! grep -q "^CONFIG_SKIP_PACKAGE_BUILD=y$" .config; then
+            echo "CONFIG_SKIP_PACKAGE_BUILD=y" >> .config
+          fi
+
+          # 编译，verbose 可选
+          if ${{ inputs.verbose }}; then
+            make -j$(nproc) V=s 2>&1 | tee build.log
+          else
+            make -j$(nproc) 2>&1 | tail -20
+          fi
+
+          # 验证固件是否生成
+          SYSUPGRADE=$(find bin/targets -name "*oray_x1_pro*-sysupgrade.bin" 2>/dev/null | head -1)
+          if [ -n "$SYSUPGRADE" ]; then
+            echo "✓ Firmware built: $SYSUPGRADE"
+            echo "size=$(stat -c%s "$SYSUPGRADE")" >> $GITHUB_OUTPUT
+            echo "name=$(basename "$SYSUPGRADE")" >> $GITHUB_OUTPUT
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "✗ Firmware NOT found!"
+            find bin/targets -name "*.bin" 2>/dev/null | head -5 || echo "No .bin files found"
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
           echo "X1Pro build finished."
           df -hT /workdir
-          echo "status=success" >> $GITHUB_OUTPUT
 
-          # 列出编译产物，用于调试
-          echo "=== Build artifacts ==="
-          find bin/targets -type f \( -name "*.bin" -o -name "*.tar" -o -name "*.fit" \) 2>/dev/null || echo "No firmware found!"
-
-      - name: List build artifacts (debug)
-        if: steps.compile.outputs.status == 'success'
+      - name: List build artifacts
         run: |
-          echo "=== Artifacts that will be uploaded ==="
-          ls -lh openwrt/bin/targets/mediatek/filogic/ 2>/dev/null || ls -lhR openwrt/bin/targets/ 2>/dev/null || echo "No targets found"
-          echo ""
-          echo "=== Full targets path ==="
-          find openwrt/bin/targets -type f -name "*.bin" -o -name "*.fit" -o -name "*.tar" 2>/dev/null
+          echo "=== Firmware artifacts ==="
+          find openwrt/bin/targets -name "*oray_x1_pro*" 2>/dev/null | while read f; do
+            echo "  $(basename $f) ($(du -h "$f" | cut -f1))"
+          done
+
+      - name: Cache save (always)
+        if: always()
+        uses: actions/cache@v6
+        with:
+          path: |
+            /workdir/.ccache
+            /workdir/openwrt/dl
+          key: ${{ runner.os }}-openwrt-x1pro-${{ env.REPO_BRANCH }}-${{ hashFiles('config/X1Pro.config') }}
+          # 编译完后无条件保存 cache，下次可复用
 
       - name: Upload Binaries (Artifacts)
         uses: actions/upload-artifact@v7
@@ -278,23 +324,20 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "Release tag: $RELEASE_TAG"
 
-          cat > release.txt << EOF
-          ## ImmortalWrt X1Pro Firmware Release
-
-          **Release:** $RELEASE_TAG
-          **Branch:** $REPO_BRANCH
-          **Device:** Oray X1 Pro (ubootmod, 112M UBI)
-          **Build Date:** $(date +"%Y-%m-%d %H:%M:%S")
-
-          ## Download
-
-          从下方 Assets 下载固件。
-          通过 uboot web 刷写 `sysupgrade.bin` 即可。
-
-          ---
-
-          Built with [GitHub Actions](https://github.com/features/actions)
-          EOF
+          printf '%s\n' \
+            '## ImmortalWrt X1Pro Firmware Release' \
+            '' \
+            'Device: Oray X1 Pro (ubootmod, 112M UBI)' \
+            'Branch: openwrt-24.10-6.6' \
+            'Supported Devices (uboot check): cudy,tr3000-v1-ubootmod' \
+            '' \
+            '## Downloads' \
+            '' \
+            'Download from the Assets section below, then flash via uboot Web UI.' \
+            'Pre-flash: setenv mtd_layout x1pro-mod-112m; saveenv; reset' \
+            '' \
+            'Built with GitHub Actions' \
+            > release.txt
 
           echo "status=success" >> $GITHUB_OUTPUT
 
@@ -310,8 +353,6 @@ jobs:
             echo "WARNING: No sysupgrade files found!"
             echo "contents=" >> $GITHUB_OUTPUT
           else
-            # 转为多行字符串传给后续步骤
-            # 用 JSON 编码避免空格/换行问题
             echo "contents<<EOF" >> $GITHUB_OUTPUT
             echo "$SYSUPGRADE_FILES" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
@@ -324,7 +365,6 @@ jobs:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
           prerelease: ${{ env.PRERELEASE == 'true' }}
-          # 只发布 sysupgrade.bin 刷机文件，其他中间产物忽略
           files: |
             openwrt/bin/targets/mediatek/filogic/*oray_x1_pro*-squashfs-sysupgrade.bin
 
