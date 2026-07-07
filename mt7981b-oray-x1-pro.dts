@@ -210,8 +210,8 @@
 				reg = <0x600000 0x200000>;
 			};
 
-			ubi: partition@800000 {
-				label = "ubi";
+			ubi_0: partition@800000 {
+				label = "ubi_0";
 				compatible = "linux,ubi";
 				reg = <0x800000 0x7000000>;
 			};
@@ -242,6 +242,6 @@
 	nvmem-cell-names = "eeprom";
 };
 
-&ubi {
+&ubi_0 {
 	reg = <0x800000 0x7000000>;
 };
