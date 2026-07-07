@@ -54,7 +54,7 @@ env:
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
   CONFIG_FILE: config/X1Pro.config
-  UPLOAD_RELEASE: ${{ github.event.inputs.release || github.event.client_payload.release }}
+  UPLOAD_RELEASE: ${{ github.event.inputs.release || github.event.client_payload.release || 'true' }}
   PRERELEASE: ${{ github.event.inputs.prerelease }}
   TZ: Asia/Shanghai
 
