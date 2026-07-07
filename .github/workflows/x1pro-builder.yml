@@ -49,6 +49,7 @@ env:
   REPO_BRANCH: openwrt-24.10-6.6
   REPO_COMMIT: ${{ github.event.inputs.commit }}
   FEEDS_CONF: feeds.conf.default
+  DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
   CONFIG_FILE: config/X1Pro.config
   UPLOAD_RELEASE: ${{ github.event.inputs.release || github.event.client_payload.release }}
@@ -113,6 +114,8 @@ jobs:
       - name: Load custom configuration
         run: |
           [ -e $CONFIG_FILE ] && cp -f $CONFIG_FILE openwrt/.config
+          chmod +x $DIY_P1_SH
+          $GITHUB_WORKSPACE/$DIY_P1_SH
           chmod +x $DIY_P2_SH
           cd openwrt
           $GITHUB_WORKSPACE/$DIY_P2_SH
@@ -237,6 +240,10 @@ jobs:
           cd openwrt
           # 使用预先生成的完整配置
           cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
+          # 添加 X1 Pro 设备支持（DTS、filogic.mk、board.d 补丁）
+          chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH
+          $GITHUB_WORKSPACE/$DIY_P1_SH
+          # Rust LLVM 修复 + 编译日期
           chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
           $GITHUB_WORKSPACE/$DIY_P2_SH
           # 应用 defconfig 确保依赖完整
