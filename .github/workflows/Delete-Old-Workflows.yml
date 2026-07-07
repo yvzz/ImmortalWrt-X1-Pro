@@ -3,16 +3,24 @@ name: Delete Old Workflows
 on:
   workflow_dispatch:
     inputs:
-      delete_all_failed:
-        description: '是否删除全部失败的 Workflow'
+      delete_failed:
+        description: '删除失败的 Workflow'
         required: true
         type: choice
-        default: 'NO'
+        default: 'YES'
+        options:
+          - 'YES'
+          - 'NO'
+      delete_cancelled:
+        description: '删除取消的 Workflow'
+        required: true
+        type: choice
+        default: 'YES'
         options:
           - 'YES'
           - 'NO'
       retain_days:
-        description: '保留最近几天的 Workflow'
+        description: '保留天数（0 = 除正在运行的全部删除）'
         required: true
         type: number
         default: 1
@@ -22,29 +30,65 @@ on:
 jobs:
   Cleaning:
     runs-on: ubuntu-24.04
-
     steps:
-    - name: Delete All Failed Workflows
-      if: ${{ inputs.delete_all_failed == 'YES' }}
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        retain_days: 0
-        keep_minimum_runs: 0
-        delete_run_by_conclusion_pattern: failure
+    - name: Delete old workflow runs
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -e
 
-    - name: Delete Old Workflows By Days
-      if: ${{ inputs.delete_all_failed != 'YES' }}
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        retain_days: ${{ inputs.retain_days || 1 }}
-        keep_minimum_runs: ${{ inputs.retain_days || 1 }}
-        delete_run_by_conclusion_pattern: ''
+        RETAIN_DAYS="${{ inputs.retain_days }}"
+        CURRENT_RUN_ID="${{ github.run_id }}"
+
+        echo "RETAIN_DAYS=$RETAIN_DAYS, CURRENT_RUN_ID=$CURRENT_RUN_ID"
+
+        gh run list -R ${{ github.repository }} --limit 200 \
+          --json databaseId,status,conclusion,workflowName,createdAt \
+          > /tmp/runs.json
+
+        > /tmp/ids-to-delete.txt
+
+        if [ "$RETAIN_DAYS" -eq 0 ]; then
+          echo "Mode: delete all completed runs (keep in-progress + current)"
+          jq -r --arg CURRENT "$CURRENT_RUN_ID" \
+            '.[] | select(.status == "completed") | select((.databaseId | tostring) != $CURRENT) | .databaseId | tostring' \
+            /tmp/runs.json > /tmp/ids-to-delete.txt
+        else
+          PATTERN=""
+          [ "${{ inputs.delete_failed }}" = "YES" ] && PATTERN="${PATTERN}failure|"
+          [ "${{ inputs.delete_cancelled }}" = "YES" ] && PATTERN="${PATTERN}cancelled|"
+          PATTERN="${PATTERN%|}"
+
+          if [ -z "$PATTERN" ]; then
+            echo "No patterns selected, nothing to delete"
+            exit 0
+          fi
+
+          CUTOFF=$(date -u -d "$RETAIN_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "Mode: delete runs matching [$PATTERN] older than $CUTOFF"
+
+          jq -r --arg CURRENT "$CURRENT_RUN_ID" --arg CUTOFF "$CUTOFF" --arg PATTERN "$PATTERN" \
+            '.[] | select(.status == "completed") | select((.databaseId | tostring) != $CURRENT) | select(.createdAt < $CUTOFF) | select(.conclusion | test($PATTERN)) | .databaseId | tostring' \
+            /tmp/runs.json > /tmp/ids-to-delete.txt
+        fi
+
+        COUNT=$(wc -l < /tmp/ids-to-delete.txt)
+        echo "Found $COUNT runs to delete"
+
+        if [ "$COUNT" -eq 0 ]; then
+          exit 0
+        fi
+
+        while read -r id; do
+          echo "Deleting run: $id"
+          gh run delete "$id" -R ${{ github.repository }} 2>&1 | sed 's/^/  /' || echo "  Failed: $id"
+        done < /tmp/ids-to-delete.txt
+
+        echo "Done"
 
     - name: Delete Old Releases
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         KEEP=5
         RELEASES=$(gh release list -R ${{ github.repository }} --limit 100 --json tagName,createdAt -q 'sort_by(.createdAt) | reverse | .['"$KEEP"':] | .[].tagName')
