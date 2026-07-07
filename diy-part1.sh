@@ -20,13 +20,13 @@ mkdir -p "$DTS_DIR"
 if [ -f "$WORKSPACE/mt7981b-oray-x1pro-v1-ubootmod.dts" ]; then
   echo "[1/5] Copying ubootmod DTS..."
   cp "$WORKSPACE/mt7981b-oray-x1pro-v1-ubootmod.dts" "$DTS_DIR"
-  echo "      → $DTS_DIRmt7981b-oray-x1pro-v1-ubootmod.dts"
+  echo "      → ${DTS_DIR}mt7981b-oray-x1pro-v1-ubootmod.dts"
 fi
 
 if [ -f "$WORKSPACE/mt7981b-oray-x1pro-v1.dtsi" ]; then
   echo "[1/5] Copying shared .dtsi..."
   cp "$WORKSPACE/mt7981b-oray-x1pro-v1.dtsi" "$DTS_DIR"
-  echo "      → $DTS_DIRmt7981b-oray-x1pro-v1.dtsi"
+  echo "      → ${DTS_DIR}mt7981b-oray-x1pro-v1.dtsi"
 fi
 
 # ── 2. Patch filogic.mk: 去掉 stock oray_x1pro-v1，只保留 ubootmod ────────
@@ -45,7 +45,7 @@ if [ -f "$FILOGIC_SRC" ]; then
     skip { next }
     { print }
   ' "$FILOGIC_DST" > "${FILOGIC_DST}.tmp" && mv "${FILOGIC_DST}.tmp" "$FILOGIC_DST"
-  echo "      → $FILOGIC_DST (stock oray_x1pro-v1 removed)"
+  echo "      → ${FILOGIC_DST} (stock oray_x1pro-v1 removed)"
 else
   echo "[2/5] WARNING: $FILOGIC_SRC not found"
 fi
@@ -78,7 +78,7 @@ uci commit network
 exit 0
 EOFBOARD
 chmod +x "$BOARD_D/02_network"
-echo "      → $BOARD_D/02_network"
+echo "      → ${BOARD_D}/02_network"
 
 # 11_fix_wifi_mac — 读取 bdinfo 分区 MAC 地址并写入网络接口
 cat > "$BOARD_D/11_fix_wifi_mac" << 'EOFMAC'
@@ -132,7 +132,7 @@ fi
 exit 0
 EOFMAC
 chmod +x "$BOARD_D/11_fix_wifi_mac"
-echo "      → $BOARD_D/11_fix_wifi_mac"
+echo "      → ${BOARD_D}/11_fix_wifi_mac"
 
 # ── 4. 03_gpio_switches (GPIO 按键注册) ────────────────────────────────────
 cat > "$BOARD_D/03_gpio_switches" << 'EOFGPIO'
@@ -158,7 +158,7 @@ uci commit system
 exit 0
 EOFGPIO
 chmod +x "$BOARD_D/03_gpio_switches"
-echo "      → $BOARD_D/03_gpio_switches"
+echo "      → ${BOARD_D}/03_gpio_switches"
 
 # ── 5. 自定义本地 packages ─────────────────────────────────────────────────
 echo "[4/5] Installing custom packages..."
