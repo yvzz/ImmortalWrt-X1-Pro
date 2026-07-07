@@ -1,6 +1,8 @@
 name: Delete Old Workflows
 
 on:
+  push:
+    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       delete_failed:
@@ -23,7 +25,7 @@ on:
         description: '保留天数（0 = 除正在运行的全部删除）'
         required: true
         type: number
-        default: 30
+        default: 7
   schedule:
     - cron: 0 3 * * 0
 
@@ -37,7 +39,9 @@ jobs:
       run: |
         set -e
 
-        RETAIN_DAYS="${{ inputs.retain_days }}"
+        RETAIN_DAYS="${{ inputs.retain_days || '7' }}"
+        DELETE_FAILED="${{ inputs.delete_failed || 'YES' }}"
+        DELETE_CANCELLED="${{ inputs.delete_cancelled || 'YES' }}"
         CURRENT_RUN_ID="${{ github.run_id }}"
 
         echo "RETAIN_DAYS=$RETAIN_DAYS, CURRENT_RUN_ID=$CURRENT_RUN_ID"
@@ -48,28 +52,41 @@ jobs:
 
         > /tmp/ids-to-delete.txt
 
+        # delete_failed / delete_cancelled: 不受时间限制，YES 即全删
+        # retain_days=0: 删全部 completed
+        # retain_days>0: 删超过保留期的 completed
+        > /tmp/ids-to-delete.txt
+
+        # retain_days=0: 删全部 completed（不论状态）
         if [ "$RETAIN_DAYS" -eq 0 ]; then
-          echo "Mode: delete all completed runs (keep in-progress + current)"
+          echo "Mode: delete ALL completed runs (retain_days=0)" >&2
           jq -r --arg CURRENT "$CURRENT_RUN_ID" \
             '.[] | select(.status == "completed") | select((.databaseId | tostring) != $CURRENT) | .databaseId | tostring' \
-            /tmp/runs.json > /tmp/ids-to-delete.txt
+            /tmp/runs.json >> /tmp/ids-to-delete.txt
         else
-          PATTERN=""
-          [ "${{ inputs.delete_failed }}" = "YES" ] && PATTERN="${PATTERN}failure|"
-          [ "${{ inputs.delete_cancelled }}" = "YES" ] && PATTERN="${PATTERN}cancelled|"
-          PATTERN="${PATTERN%|}"
+          CUTOFF=$(date -u -d "$RETAIN_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "Mode: delete runs older than $CUTOFF" >&2
 
-          if [ -z "$PATTERN" ]; then
-            echo "No patterns selected, nothing to delete"
-            exit 0
+          # failed/cancelled: 不受时间限制，YES 即全删
+          if [ "$DELETE_FAILED" = "YES" ]; then
+            echo "  + ALL failed runs (no time limit)" >&2
+            jq -r --arg CURRENT "$CURRENT_RUN_ID" \
+              '.[] | select(.status == "completed") | select(.conclusion == "failure") | select((.databaseId | tostring) != $CURRENT) | .databaseId | tostring' \
+              /tmp/runs.json >> /tmp/ids-to-delete.txt
           fi
 
-          CUTOFF=$(date -u -d "$RETAIN_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
-          echo "Mode: delete runs matching [$PATTERN] older than $CUTOFF"
+          if [ "$DELETE_CANCELLED" = "YES" ]; then
+            echo "  + ALL cancelled runs (no time limit)" >&2
+            jq -r --arg CURRENT "$CURRENT_RUN_ID" \
+              '.[] | select(.status == "completed") | select(.conclusion == "cancelled") | select((.databaseId | tostring) != $CURRENT) | .databaseId | tostring' \
+              /tmp/runs.json >> /tmp/ids-to-delete.txt
+          fi
 
-          jq -r --arg CURRENT "$CURRENT_RUN_ID" --arg CUTOFF "$CUTOFF" --arg PATTERN "$PATTERN" \
-            '.[] | select(.status == "completed") | select((.databaseId | tostring) != $CURRENT) | select(.createdAt < $CUTOFF) | select(.conclusion | test($PATTERN)) | .databaseId | tostring' \
-            /tmp/runs.json > /tmp/ids-to-delete.txt
+          # success runs: 受时间限制
+          echo "  + success runs older than $CUTOFF" >&2
+          jq -r --arg CURRENT "$CURRENT_RUN_ID" --arg CUTOFF "$CUTOFF" \
+            '.[] | select(.status == "completed") | select(.conclusion == "success") | select((.databaseId | tostring) != $CURRENT) | select(.createdAt < $CUTOFF) | .databaseId | tostring' \
+            /tmp/runs.json >> /tmp/ids-to-delete.txt
         fi
 
         COUNT=$(wc -l < /tmp/ids-to-delete.txt)
