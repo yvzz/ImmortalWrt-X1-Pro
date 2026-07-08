@@ -185,8 +185,8 @@
 				reg = <0x600000 0x200000>;
 			};
 
-			ubi_0: partition@800000 {
-				label = "ubi_0";
+			ubi: partition@800000 {
+				label = "ubi";
 				compatible = "linux,ubi";
 			};
 		};

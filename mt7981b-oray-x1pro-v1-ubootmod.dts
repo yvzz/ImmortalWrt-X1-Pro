@@ -21,6 +21,6 @@
 	mediatek,bmt-max-reserved-blocks = <64>;
 };
 
-&ubi_0 {
+&ubi {
 	reg = <0x800000 0x7000000>;
 };
