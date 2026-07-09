@@ -259,18 +259,17 @@ jobs:
           # 下载所有依赖
           make download -j$(nproc)
 
-          # 跳过 ipk 包编译，只编译内核 + rootfs + sysupgrade.bin
-          if grep -q "^# CONFIG_SKIP_PACKAGE_BUILD is not set$" .config; then
-            sed -i 's/^# CONFIG_SKIP_PACKAGE_BUILD is not set/CONFIG_SKIP_PACKAGE_BUILD=y/' .config
-          elif ! grep -q "^CONFIG_SKIP_PACKAGE_BUILD=y$" .config; then
-            echo "CONFIG_SKIP_PACKAGE_BUILD=y" >> .config
-          fi
-
-          # 编译，verbose 可选
+          # 编译，始终保留完整日志
           if [ "${{ inputs.verbose }}" = "true" ]; then
             make -j$(nproc) V=s 2>&1 | tee build.log
           else
-            make -j$(nproc) 2>&1 | tail -30
+            make -j$(nproc) 2>&1 | tee build.log | tail -50
+          fi
+
+          # 如果编译失败，打印最后200行日志帮助诊断
+          if ! find bin/targets -name "*oray_x1pro-v1-ubootmod*sysupgrade.bin" 2>/dev/null | grep -q .; then
+            echo "=== BUILD FAILED — last 200 lines of build.log ==="
+            tail -200 build.log || true
           fi
 
           # 验证固件是否生成
