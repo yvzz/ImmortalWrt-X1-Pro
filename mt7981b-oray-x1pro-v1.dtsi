@@ -82,7 +82,7 @@
 		phy-mode = "2500base-x";
 		phy-handle = <&phy1>;
 		nvmem-cell-names = "mac-address";
-		nvmem-cells = <&macaddr_factory_e000 0>;
+		nvmem-cells = <&macaddr_factory_e000>;
 	};
 
 	gmac1: mac@1 {
@@ -91,7 +91,7 @@
 		phy-mode = "gmii";
 		phy-handle = <&int_gbe_phy>;
 		nvmem-cell-names = "mac-address";
-		nvmem-cells = <&macaddr_factory_04 0>;
+		nvmem-cells = <&macaddr_factory_04>;
 	};
 };
 
@@ -155,15 +155,11 @@
 					};
 
 					macaddr_factory_04: macaddr@4 {
-						compatible = "mac-base";
 						reg = <0x4 0x6>;
-						#nvmem-cell-cells = <1>;
 					};
 
 					macaddr_factory_e000: macaddr@e000 {
-						compatible = "mac-base";
 						reg = <0xe000 0x6>;
-						#nvmem-cell-cells = <1>;
 					};
 				};
 			};
@@ -187,6 +183,7 @@
 
 			ubi: partition@800000 {
 				label = "ubi";
+				reg = <0x800000 0x7000000>;
 				compatible = "linux,ubi";
 			};
 		};
