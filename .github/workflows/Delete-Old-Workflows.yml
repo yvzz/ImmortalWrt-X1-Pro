@@ -47,7 +47,7 @@ jobs:
         echo "RETAIN_DAYS=$RETAIN_DAYS, CURRENT_RUN_ID=$CURRENT_RUN_ID"
 
         gh run list -R ${{ github.repository }} --limit 200 \
-          --json databaseId,status,conclusion,workflowName,createdAt \
+          --json databaseId,status,conclusion,workflowName,createdAt,updatedAt \
           > /tmp/runs.json
 
         > /tmp/ids-to-delete.txt
@@ -82,10 +82,10 @@ jobs:
               /tmp/runs.json >> /tmp/ids-to-delete.txt
           fi
 
-          # success runs: 受时间限制
-          echo "  + success runs older than $CUTOFF" >&2
+          # success runs: 删超过保留期的，或运行时间 < 180s
+          echo "  + success runs: older than $CUTOFF OR runtime < 180s" >&2
           jq -r --arg CURRENT "$CURRENT_RUN_ID" --arg CUTOFF "$CUTOFF" \
-            '.[] | select(.status == "completed") | select(.conclusion == "success") | select((.databaseId | tostring) != $CURRENT) | select(.createdAt < $CUTOFF) | .databaseId | tostring' \
+            '.[] | select(.status == "completed") | select(.conclusion == "success") | select((.databaseId | tostring) != $CURRENT) | select((.createdAt < $CUTOFF) or ((.updatedAt | fromdateiso8601) - (.createdAt | fromdateiso8601) < 60)) | .databaseId | tostring' \
             /tmp/runs.json >> /tmp/ids-to-delete.txt
         fi
 
