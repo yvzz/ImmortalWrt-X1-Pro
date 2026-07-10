@@ -7,3 +7,4 @@ src-git aurora https://github.com/eamonxg/luci-theme-aurora.git
 src-git aurora_config https://github.com/eamonxg/luci-app-aurora-config.git
 src-git openclash https://github.com/vernesong/OpenClash.git
 src-git bandix https://github.com/timsaya/luci-app-bandix.git
+src-git openwrt_bandix https://github.com/timsaya/openwrt-bandix.git
