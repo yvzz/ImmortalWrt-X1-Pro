@@ -929,6 +929,23 @@ define Device/oray_x1pro-v1
 endef
 TARGET_DEVICES += oray_x1pro-v1
 
+define Device/oray_x1pro-v1-ubootmod
+  DEVICE_VENDOR := Oray
+  DEVICE_MODEL := 蒲公英 X1Pro
+  DEVICE_VARIANT := v1 ubootmod
+  DEVICE_DTS := mt7981b-oray-x1pro-v1-ubootmod
+  DEVICE_DTS_DIR := ../dts
+  SUPPORTED_DEVICES += R47 cudy_tr3000-v1-ubootmod
+  UBINIZE_OPTS := -E 5
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  IMAGE_SIZE := 114688k
+  KERNEL_IN_UBI := 1
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  DEVICE_PACKAGES := kmod-usb3 automount
+endef
+TARGET_DEVICES += oray_x1pro-v1-ubootmod
+
 define Device/cudy_wr3000-v1
   DEVICE_VENDOR := Cudy
   DEVICE_MODEL := WR3000
@@ -2631,19 +2648,3 @@ endif
 endef
 TARGET_DEVICES += wirelesstag_zx7981pd-ubootmod
 
-define Device/oray_x1pro-v1-ubootmod
-  DEVICE_VENDOR := Oray
-  DEVICE_MODEL := 蒲公英 X1Pro
-  DEVICE_VARIANT := v1 ubootmod
-  DEVICE_DTS := mt7981b-oray-x1pro-v1-ubootmod
-  DEVICE_DTS_DIR := ../dts
-  SUPPORTED_DEVICES += R47 cudy_tr3000-v1-ubootmod
-  UBINIZE_OPTS := -E 5
-  BLOCKSIZE := 128k
-  PAGESIZE := 2048
-  IMAGE_SIZE := 114688k
-  KERNEL_IN_UBI := 1
-  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
-  DEVICE_PACKAGES := kmod-usb3 automount
-endef
-TARGET_DEVICES += oray_x1pro-v1-ubootmod
