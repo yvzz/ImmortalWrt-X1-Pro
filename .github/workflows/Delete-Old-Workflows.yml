@@ -27,7 +27,7 @@ on:
         type: number
         default: 7
   schedule:
-    - cron: 0 3 * * 0
+    - cron: 0 16 * * 0   # 每周日 16:00 UTC = 北京时间周一 00:00
 
 jobs:
   Cleaning:
