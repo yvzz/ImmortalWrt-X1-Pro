@@ -120,6 +120,8 @@ jobs:
         run: |
           cd openwrt
           ./scripts/feeds update -a && ./scripts/feeds install -a
+          echo "=== feeds installed, verifying aurora/bandix packages ==="
+          ./scripts/feeds list 2>/dev/null | grep -iE "aurora|bandix|openclash" || true
 
       - name: Load custom configuration
         run: |
