@@ -15,6 +15,8 @@ echo "=== DIY Part 1: X1 Pro setup ==="
 mkdir -p "$OPENWRT/package"
 git clone --depth=1 https://github.com/eamonxg/luci-theme-aurora "$OPENWRT/package/luci-theme-aurora"
 git clone --depth=1 https://github.com/eamonxg/luci-app-aurora-config "$OPENWRT/package/luci-app-aurora-config"
+git clone --depth=1 https://github.com/timsaya/luci-app-bandix  "$OPENWRT/package/luci-app-bandix"
+git clone --depth=1 https://github.com/timsaya/openwrt-bandix  "$OPENWRT/package/openwrt-bandix"
 echo "  → aurora packages cloned"
 
 # 2. Copy DTS files
