@@ -97,6 +97,14 @@ jobs:
           git clone $REPO_URL -b $REPO_BRANCH --single-branch --filter=blob:none openwrt
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
+      - name: Cache OpenWrt feeds
+        uses: actions/cache@v6
+        with:
+          path: /workdir/openwrt/feeds
+          key: ${{ runner.os }}-openwrt-feeds-${{ env.REPO_BRANCH }}-${{ hashFiles('feeds.conf.default') }}
+          restore-keys: |
+            ${{ runner.os }}-openwrt-feeds-${{ env.REPO_BRANCH }}-
+
       - name: Copy previous config if exists
         run: |
           if [ -f "$GITHUB_WORKSPACE/${CONFIG_FILE}" ]; then
@@ -117,9 +125,11 @@ jobs:
           cp $GITHUB_WORKSPACE/$FEEDS_CONF .
 
       - name: Update & Install feeds
+        timeout-minutes: 15
         run: |
-          cd openwrt
-          ./scripts/feeds update -a && ./scripts/feeds install -a
+          # 使用 shallow clone 加速首次 clone
+          GIT_SHALLOW=1 ./scripts/feeds update -a
+          GIT_SHALLOW=1 ./scripts/feeds install -a
 
       - name: Load custom configuration
         run: |
@@ -223,7 +233,8 @@ jobs:
           path: |
             /workdir/.ccache
             /workdir/openwrt/dl
-          key: ${{ runner.os }}-openwrt-x1pro-${{ env.REPO_BRANCH }}-${{ hashFiles('config/X1Pro.config') }}
+            /workdir/openwrt/feeds
+          key: ${{ runner.os }}-openwrt-x1pro-${{ env.REPO_BRANCH }}-${{ hashFiles('config/X1Pro.config', 'feeds.conf.default') }}
           restore-keys: |
             ${{ runner.os }}-openwrt-x1pro-${{ env.REPO_BRANCH }}-
 
@@ -249,6 +260,7 @@ jobs:
 
       - name: Update & Install feeds
         working-directory: /workdir/openwrt
+        timeout-minutes: 15
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
@@ -336,7 +348,8 @@ jobs:
           path: |
             /workdir/.ccache
             /workdir/openwrt/dl
-          key: ${{ runner.os }}-openwrt-x1pro-${{ env.REPO_BRANCH }}-${{ hashFiles('config/X1Pro.config') }}
+            /workdir/openwrt/feeds
+          key: ${{ runner.os }}-openwrt-x1pro-${{ env.REPO_BRANCH }}-${{ hashFiles('config/X1Pro.config', 'feeds.conf.default') }}
 
       - name: Upload Binaries (Artifacts)
         uses: actions/upload-artifact@v7
