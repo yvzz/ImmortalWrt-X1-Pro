@@ -131,7 +131,8 @@ jobs:
         timeout-minutes: 10
         run: |
           ./scripts/feeds update -a
-          # 安装全部 feeds（包含 zoneinfo-all 等所有子包），bandix/luci-app-* 的依赖都在
+          # 安装全部 feeds（bandix/luci-app-* 的依赖都在）
+          # 时区包依赖通过本地 x1pro-zoneinfo metapackage 提供
           ./scripts/feeds install -a
 
       - name: Load custom configuration
@@ -266,7 +267,8 @@ jobs:
         timeout-minutes: 10
         run: |
           ./scripts/feeds update -a
-          # 安装全部 feeds（包含 zoneinfo-all 等所有子包），bandix/luci-app-* 的依赖都在
+          # 安装全部 feeds（bandix/luci-app-* 的依赖都在）
+          # 时区包依赖通过本地 x1pro-zoneinfo metapackage 提供
           ./scripts/feeds install -a
 
       - name: Load custom configuration
