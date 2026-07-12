@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 X1 Pro MAC fix patch for 02_network.
-Injects a case block that re-reads WAN/LAN MAC from bdinfo mtd partition,
-because the kernel DSA driver fails to read MAC via nvmem (returns all-FFs).
+Injects a case block that reads WAN/LAN MAC from Factory partition
+(offset 0xe000), because the kernel DSA driver fails to read MAC via
+nvmem (returns all-FFs).
 This script is called from diy-part1.sh — kept separate to avoid shell
 heredoc tab/backslash escaping that would corrupt the patch.
 """
@@ -20,12 +21,11 @@ def patch_file(filepath: str) -> None:
     # Use real tab characters (\t) — no escaping needed since this is a plain
     # Python source file, not a shell heredoc.
     new_tail = """\
-# X1 Pro MAC fix: kernel DSA driver fails to read MAC via nvmem for eth0/eth1,
-# resulting in all-Fs. Re-read from bdinfo (wan_mac/lan_mac are local vars
-# inside mediatek_setup_macs, not visible here).
+# X1 Pro MAC fix: read MAC from Factory partition offset 0xe000
+# eth0 (WAN) = base MAC, eth1 (LAN) = base MAC + 1
 case $board in
 oray,x1pro-v1|oray,x1pro-v1-ubootmod)
-	_x1_wan=$(mtd_get_mac_binary bdinfo 0xde00)
+	_x1_wan=$(mtd_get_mac_binary Factory 0xe000)
 	if [ -n "$_x1_wan" ]; then
 		ip link set eth0 address "$_x1_wan" 2>/dev/null
 		ip link set eth1 address "$(macaddr_add "$_x1_wan" 1)" 2>/dev/null
