@@ -8,7 +8,7 @@ on:
   #   branches:
   #     - main
   schedule:
-    - cron: 35 15 * * *
+    - cron: 37 23 * * *
   repository_dispatch:
     types: [ "X1Pro Update" ]
   workflow_dispatch:
