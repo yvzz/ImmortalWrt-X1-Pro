@@ -117,13 +117,12 @@ jobs:
       - name: Apply patches
         working-directory: /workdir/openwrt
         run: |
-          # 复制自定义 DTS 文件链（与 success-build 一致）
-          mkdir -p target/linux/mediatek/dts
-          cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1.dtsi target/linux/mediatek/dts/
-          cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1.dts target/linux/mediatek/dts/
-          cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1-ubootmod.dts target/linux/mediatek/dts/
-          # 复制 repo filogic.mk（整体替换上游，包含 oray_x1pro-v1-ubootmod 设备定义）
-          cp $GITHUB_WORKSPACE/filogic.mk target/linux/mediatek/image/
+          # --- X1Pro 设备支持已集成到上游源码，无需复制 ---
+          # mkdir -p target/linux/mediatek/dts
+          # cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1.dtsi target/linux/mediatek/dts/
+          # cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1.dts target/linux/mediatek/dts/
+          # cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1-ubootmod.dts target/linux/mediatek/dts/
+          # cp $GITHUB_WORKSPACE/filogic.mk target/linux/mediatek/image/
           # 复制 feeds 配置
           cp $GITHUB_WORKSPACE/$FEEDS_CONF .
 
@@ -252,13 +251,12 @@ jobs:
       - name: Apply patches
         working-directory: /workdir/openwrt
         run: |
-          # 复制自定义 DTS 文件链（与 success-build 一致）
-          mkdir -p target/linux/mediatek/dts
-          cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1.dtsi target/linux/mediatek/dts/
-          cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1.dts target/linux/mediatek/dts/
-          cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1-ubootmod.dts target/linux/mediatek/dts/
-          # 复制 repo filogic.mk（整体替换上游，包含 oray_x1pro-v1-ubootmod 设备定义）
-          cp $GITHUB_WORKSPACE/filogic.mk target/linux/mediatek/image/
+          # --- X1Pro 设备支持已集成到上游源码，无需复制 ---
+          # mkdir -p target/linux/mediatek/dts
+          # cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1.dtsi target/linux/mediatek/dts/
+          # cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1.dts target/linux/mediatek/dts/
+          # cp $GITHUB_WORKSPACE/mt7981b-oray-x1pro-v1-ubootmod.dts target/linux/mediatek/dts/
+          # cp $GITHUB_WORKSPACE/filogic.mk target/linux/mediatek/image/
           # 复制 feeds 配置
           cp $GITHUB_WORKSPACE/$FEEDS_CONF .
 
