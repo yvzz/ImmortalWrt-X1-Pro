@@ -1,6 +1,7 @@
 name: Build ImmortalWrt 128muboot
 permissions:
   contents: write
+  actions: write  # Mattraks/delete-workflow-runs 需要
 
 on:
   # push:

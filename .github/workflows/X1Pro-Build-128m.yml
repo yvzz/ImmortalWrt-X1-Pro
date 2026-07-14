@@ -1,6 +1,7 @@
 name: Build ImmortalWrt 128m
 permissions:
   contents: write
+  actions: write  # Mattraks/delete-workflow-runs 需要
 
 on:
   # push:
@@ -314,13 +315,13 @@ jobs:
           fi
 
           # 如果编译失败，打印最后200行日志帮助诊断
-          if ! find bin/targets -name "*oray_x1pro-v1-ubootmod*sysupgrade.bin" 2>/dev/null | grep -q .; then
+          if ! find bin/targets -name "*oray_x1pro-v1*sysupgrade.bin" 2>/dev/null | grep -q .; then
             echo "=== BUILD FAILED — last 200 lines of build.log ==="
             tail -200 build.log || true
           fi
 
           # 验证固件是否生成
-          SYSUPGRADE=$(find bin/targets -name "*oray_x1pro-v1-ubootmod*sysupgrade.bin" 2>/dev/null | head -1)
+          SYSUPGRADE=$(find bin/targets -name "*oray_x1pro-v1*sysupgrade.bin" 2>/dev/null | head -1)
           if [ -n "$SYSUPGRADE" ]; then
             echo "Firmware built: $SYSUPGRADE ($(du -h "$SYSUPGRADE" | cut -f1))"
             echo "name=$(basename "$SYSUPGRADE")" >> $GITHUB_OUTPUT
@@ -337,7 +338,7 @@ jobs:
       - name: List build artifacts
         run: |
           echo "=== Firmware artifacts ==="
-          find openwrt/bin/targets -name "*oray_x1pro-v1-ubootmod*" 2>/dev/null | while read f; do
+          find openwrt/bin/targets -name "*oray_x1pro-v1*" 2>/dev/null | while read f; do
             echo "  $(basename $f) ($(du -h "$f" | cut -f1))"
           done
 
@@ -357,7 +358,7 @@ jobs:
         with:
           name: ImmortalWrt_X1Pro-openwrt-24.10-6.6-${{ env.BUILD_DATE }}
           path: |
-            openwrt/bin/targets/mediatek/filogic/*oray_x1pro-v1-ubootmod*sysupgrade.bin
+            openwrt/bin/targets/mediatek/filogic/*oray_x1pro-v1*sysupgrade.bin
 
       - name: Generate Release Tag
         id: tag
@@ -389,7 +390,7 @@ jobs:
         if: steps.tag.outputs.status == 'success'
         run: |
           FIRMWARE_DIR="openwrt/bin/targets/mediatek/filogic"
-          SYSUPGRADE_FILES=$(ls "$FIRMWARE_DIR"/*oray_x1pro-v1-ubootmod*squashfs-sysupgrade.bin 2>/dev/null || true)
+          SYSUPGRADE_FILES=$(ls "$FIRMWARE_DIR"/*oray_x1pro-v1*squashfs-sysupgrade.bin 2>/dev/null || true)
           echo "Found sysupgrade files:"
           echo "$SYSUPGRADE_FILES"
           if [ -z "$SYSUPGRADE_FILES" ]; then
@@ -409,7 +410,7 @@ jobs:
           body_path: release.txt
           prerelease: ${{ env.PRERELEASE == 'true' }}
           files: |
-            openwrt/bin/targets/mediatek/filogic/*oray_x1pro-v1-ubootmod*squashfs-sysupgrade.bin
+            openwrt/bin/targets/mediatek/filogic/*oray_x1pro-v1*squashfs-sysupgrade.bin
 
       - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@v2
