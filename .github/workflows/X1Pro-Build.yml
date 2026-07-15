@@ -82,55 +82,12 @@ env:
   TZ: Asia/Shanghai
 
 jobs:
-  # ── 计算构建矩阵 ──────────────────────────────────
-  setup:
-    name: Setup Build Matrix
-    runs-on: ubuntu-24.04
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Compute target matrix
-        id: set-matrix
-        run: |
-          TARGET="${{ github.event.inputs.target || github.event.client_payload.target || 'all' }}"
-          if [ "$TARGET" = "all" ]; then
-            echo 'matrix={"target":["oray_x1pro-v1","oray_x1pro-v1-ubootmod"]}' >> $GITHUB_OUTPUT
-          else
-            echo "matrix={\"target\":[\"$TARGET\"]}" >> $GITHUB_OUTPUT
-          fi
-
   # ── SSH 调试（仅手动触发 + ssh=true 时） ──────────
   menuconfig:
-    name: Menuconfig (${{ matrix.target }})
+    name: Menuconfig
     if: github.event.inputs.ssh == 'true'
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
     runs-on: ubuntu-24.04
     steps:
-      - name: Resolve vars
-        run: |
-          T="${{ matrix.target }}"
-          FW_GLOB="*${T}*"
-          echo "FW_GLOB=$FW_GLOB" >> $GITHUB_ENV
-          case "$T" in
-            oray_x1pro-v1)            CONFIG_BASE="config/128m" ;;
-            oray_x1pro-v1-ubootmod)  CONFIG_BASE="config/128muboot" ;;
-          esac
-          if [ "${{ env.PROXY }}" = "none" ]; then
-            CONFIG_FILE="${CONFIG_BASE}.config"
-          else
-            CONFIG_FILE="${CONFIG_BASE}-${{ env.PROXY }}.config"
-          fi
-          echo "CONFIG_BASE=$CONFIG_BASE" >> $GITHUB_ENV
-          echo "CONFIG_FILE=$CONFIG_FILE" >> $GITHUB_ENV
-          echo "Target: $T | Config: $CONFIG_FILE | FW: $FW_GLOB"
-
-      - name: Check Server Performance
-        run: |
-          echo "CPU: $(nproc) cores | $(cat /proc/cpuinfo | grep -m1 name | awk -F: '{print $2}')"
-
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -142,7 +99,7 @@ jobs:
           sudo mkdir -p /workdir
           sudo chown $USER:$GROUPS /workdir
 
-      - name: Clone source & apply patches
+      - name: Clone source
         working-directory: /workdir
         run: |
           git clone $REPO_URL -b $REPO_BRANCH --single-branch --filter=blob:none openwrt
@@ -158,12 +115,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-openwrt-feeds-${{ env.REPO_BRANCH }}-
 
-      - name: Copy previous config
-        run: |
-          if [ -f "$GITHUB_WORKSPACE/${CONFIG_FILE}" ]; then
-            cp -f "$GITHUB_WORKSPACE/${CONFIG_FILE}" /workdir/openwrt/.config
-          fi
-
       - name: Update & Install feeds
         timeout-minutes: 10
         working-directory: /workdir/openwrt
@@ -173,59 +124,39 @@ jobs:
 
       - name: Load config & apply diy scripts
         run: |
-          [ -e "$CONFIG_FILE" ] && cp -f "$CONFIG_FILE" openwrt/.config
-          chmod +x $DIY_P1_SH && $GITHUB_WORKSPACE/$DIY_P1_SH
-          chmod +x $DIY_P2_SH && cd openwrt && $GITHUB_WORKSPACE/$DIY_P2_SH
+          cd openwrt
+          cp -f $GITHUB_WORKSPACE/config/128m.config .config
+          chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH
+          $GITHUB_WORKSPACE/$DIY_P1_SH
+          chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
+          $GITHUB_WORKSPACE/$DIY_P2_SH
 
       - name: SSH to menuconfig
         uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 15
+        timeout-minutes: 30
 
       - name: Push config
         run: |
-          cp -f /workdir/openwrt/.config "$GITHUB_WORKSPACE/${CONFIG_FILE}"
+          cp -f /workdir/openwrt/.config "$GITHUB_WORKSPACE/config/128m.config"
           cd "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$CONFIG_FILE"
+          git add config/128m.config
           git diff --cached --quiet || (
-            git commit -m "Update config: ${CONFIG_FILE}" || true
+            git commit -m "Update config: 128m" || true
             git pull --rebase origin $(git rev-parse --abbrev-ref HEAD)
             git push -f origin HEAD:$(git rev-parse --abbrev-ref HEAD)
           )
 
-  # ── 编译 ──────────────────────────────────────────
+  # ── 编译（单 job + for 循环，复用 toolchain） ───
   build:
-    name: Build (${{ matrix.target }})
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    name: Build X1Pro
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Resolve vars
-        run: |
-          T="${{ matrix.target }}"
-          FW_GLOB="*${T}*"
-          echo "FW_GLOB=$FW_GLOB" >> $GITHUB_ENV
-          case "$T" in
-            oray_x1pro-v1)            CONFIG_BASE="config/128m" ;;
-            oray_x1pro-v1-ubootmod)  CONFIG_BASE="config/128muboot" ;;
-          esac
-          if [ "${{ env.PROXY }}" = "none" ]; then
-            CONFIG_FILE="${CONFIG_BASE}.config"
-          else
-            CONFIG_FILE="${CONFIG_BASE}-${{ env.PROXY }}.config"
-          fi
-          echo "CONFIG_BASE=$CONFIG_BASE" >> $GITHUB_ENV
-          echo "CONFIG_FILE=$CONFIG_FILE" >> $GITHUB_ENV
-          echo "Target: $T | Config: $CONFIG_FILE | FW: $FW_GLOB"
-
       - name: Check Server Performance
         run: |
-          echo "CPU物理数量: $(cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l)"
-          echo "CPU核心数量: $(nproc)"
+          echo "CPU核心: $(nproc)"
           echo "CPU型号: $(cat /proc/cpuinfo | grep -m1 name | awk -F: '{print $2}')"
           echo "内存: $(free -h | grep Mem | awk '{print $2}')"
 
@@ -234,9 +165,7 @@ jobs:
 
       - name: Set BUILD_DATE
         run: |
-          BUILD_DATE=$(date +'%Y%m%d')
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          echo "Build date: $BUILD_DATE"
+          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
 
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@main
@@ -275,7 +204,7 @@ jobs:
           fi
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-      - name: Setup ccache & DL cache
+      - name: Setup caches
         uses: actions/cache@v6
         with:
           path: |
@@ -293,44 +222,22 @@ jobs:
           ccache --set-config=compression=true
           ccache -z
 
-      - name: Apply patches
+      - name: Setup feeds & patches
         working-directory: /workdir/openwrt
         run: |
           cp $GITHUB_WORKSPACE/$FEEDS_CONF .
-
-      - name: Update & Install feeds
-        working-directory: /workdir/openwrt
-        timeout-minutes: 10
-        run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Load custom configuration
+      # ── Swap + 编译环境准备 ──
+      - name: Prepare build environment
         run: |
           cd openwrt
-          cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
-          chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH
-          $GITHUB_WORKSPACE/$DIY_P1_SH
-          chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
-          $GITHUB_WORKSPACE/$DIY_P2_SH
-          make defconfig
-
-      - name: Compile Firmware
-        id: compile
-        run: |
-          cd openwrt
-
-          # GitHub 免费 runner 7GB RAM，加 swap + 限并行
           sudo fallocate -l 4G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          NPROC=$(($(nproc) > 4 ? 4 : $(nproc)))
-          echo "CPU: $(nproc) cores, using -j${NPROC}"
-
-          make download -j${NPROC}
-
-          # binutils readelf.c musl 修复
+          # binutils readelf.c musl fix
           make toolchain/binutils/prepare V=s 2>/dev/null || true
           for rf in build_dir/toolchain-*/binutils-*/binutils/readelf.c; do
             if [ -f "$rf" ]; then
@@ -339,37 +246,92 @@ jobs:
             fi
           done
 
-          if [ "${{ inputs.verbose }}" = "true" ]; then
-            make -j${NPROC} V=s 2>&1 | tee build.log
-          else
-            make -j${NPROC} 2>&1 | tee build.log
-          fi
-
-          if ! find bin/targets -name "${FW_GLOB}*sysupgrade.bin" 2>/dev/null | grep -q .; then
-            echo "=== BUILD FAILED — last 200 lines ==="
-            tail -200 build.log || true
-          fi
-
-          SYSUPGRADE=$(find bin/targets -name "${FW_GLOB}*sysupgrade.bin" 2>/dev/null | head -1)
-          if [ -n "$SYSUPGRADE" ]; then
-            echo "Firmware built: $SYSUPGRADE ($(du -h "$SYSUPGRADE" | cut -f1))"
-            echo "name=$(basename "$SYSUPGRADE")" >> $GITHUB_OUTPUT
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "ERROR: No firmware found!"
-            find bin/targets -name "*.bin" 2>/dev/null | head -10
-            echo "status=failure" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-          df -hT /workdir
-
-      - name: List build artifacts
+      # ── 多设备循环编译 ──
+      - name: Multi-Device Compilation
+        id: compile
         run: |
-          echo "=== Firmware artifacts ==="
-          find openwrt/bin/targets -name "${FW_GLOB}*" 2>/dev/null | while read f; do
-            echo "  $(basename $f) ($(du -h "$f" | cut -f1))"
+          TARGET_INPUT="${{ github.event.inputs.target || github.event.client_payload.target || 'all' }}"
+          PROXY="${{ env.PROXY }}"
+          NPROC=$(($(nproc) > 4 ? 4 : $(nproc)))
+
+          # 确定设备列表
+          if [ "$TARGET_INPUT" = "all" ]; then
+            DEVICES="oray_x1pro-v1 oray_x1pro-v1-ubootmod"
+          else
+            DEVICES="$TARGET_INPUT"
+          fi
+
+          mkdir -p $GITHUB_WORKSPACE/firmware_collection
+          cd /workdir/openwrt
+
+          for DEV in $DEVICES; do
+            echo "::group:: Building $DEV"
+
+            # 解析 config 文件名
+            case "$DEV" in
+              oray_x1pro-v1)            CONFIG_PREFIX="config/128m" ;;
+              oray_x1pro-v1-ubootmod)   CONFIG_PREFIX="config/128muboot" ;;
+            esac
+
+            if [ "$PROXY" = "none" ]; then
+              CONFIG_FILE="${CONFIG_PREFIX}.config"
+            else
+              CONFIG_FILE="${CONFIG_PREFIX}-${PROXY}.config"
+            fi
+
+            echo "Config: $CONFIG_FILE"
+
+            # 加载配置
+            cp -f "$GITHUB_WORKSPACE/$CONFIG_FILE" .config
+
+            # 执行 diy 脚本（每个设备都要跑，因为可能设备相关）
+            chmod +x "$GITHUB_WORKSPACE/$DIY_P1_SH"
+            "$GITHUB_WORKSPACE/$DIY_P1_SH"
+            chmod +x "$GITHUB_WORKSPACE/$DIY_P2_SH"
+            "$GITHUB_WORKSPACE/$DIY_P2_SH"
+
+            make defconfig
+            make download -j$NPROC
+
+            # 编译
+            if [ "${{ inputs.verbose }}" = "true" ]; then
+              make -j1 V=s CC="ccache gcc" CXX="ccache g++" || exit 1
+            else
+              if ! make -j$NPROC CC="ccache gcc" CXX="ccache g++"; then
+                echo "Multi-threaded failed, retrying single-threaded..."
+                make -j1 V=s || exit 1
+              fi
+            fi
+
+            # 收集固件
+            FW_GLOB="*${DEV}*"
+            SYSUPGRADE=$(find bin/targets -name "${FW_GLOB}*sysupgrade.bin" 2>/dev/null | head -1)
+            if [ -z "$SYSUPGRADE" ]; then
+              echo "ERROR: No firmware for $DEV!"
+              find bin/targets -name "*.bin" 2>/dev/null | head -10
+              exit 1
+            fi
+            echo "Built: $SYSUPGRADE ($(du -h "$SYSUPGRADE" | cut -f1))"
+
+            find bin/targets -name "${FW_GLOB}*sysupgrade.bin" \
+              -exec cp {} "$GITHUB_WORKSPACE/firmware_collection/" \;
+
+            df -hT /workdir
+            echo "::endgroup::"
           done
+
+          echo "All devices compiled successfully"
+          echo "TARGET_INPUT=$TARGET_INPUT" >> $GITHUB_ENV
+          echo "status=success" >> $GITHUB_OUTPUT
+
+          # 列出产物
+          echo "=== Collected Firmware ==="
+          ls -lh $GITHUB_WORKSPACE/firmware_collection/
+
+      - name: List artifacts
+        run: |
+          echo "=== Built Firmware ==="
+          find openwrt/bin/targets -name "*sysupgrade.bin" -exec ls -lh {} \;
 
       - name: Cache save (always)
         if: always()
@@ -385,63 +347,49 @@ jobs:
         uses: actions/upload-artifact@v7
         if: steps.compile.outputs.status == 'success'
         with:
-          name: ImmortalWrt-${{ matrix.target }}-${{ env.PROXY }}-${{ env.BUILD_DATE }}
+          name: ImmortalWrt-X1Pro-${{ env.PROXY }}-${{ env.BUILD_DATE }}
           path: |
-            openwrt/bin/targets/mediatek/filogic/${FW_GLOB}*sysupgrade.bin
+            firmware_collection/*sysupgrade.bin
 
-      - name: Generate Release Tag
-        id: tag
+      # ── Release ──
+      - name: Generate Release
+        id: release
         if: steps.compile.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true'
         run: |
           BUILD_TIME=$(date +"%Y%m%d-%H%M")
           RELEASE_TAG="X1Pro-${BUILD_TIME}"
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-          echo "Release tag: $RELEASE_TAG"
+          echo "Release: $RELEASE_TAG"
 
-          printf '%s\n' \
-            '## ImmortalWrt X1Pro Firmware' \
-            '' \
-            "**设备:** Oray X1 Pro" \
-            "**目标:** ${{ matrix.target }}" \
-            "**代理:** ${{ env.PROXY }}" \
-            "**分支:** openwrt-24.10-6.6" \
-            '' \
-            "$([ -n "${{ env.BUILD_NOTES }}" ] && printf '%s\n\n' "**备注:** ${{ env.BUILD_NOTES }}")" \
-            '## 📥 下载' \
-            '' \
-            '从下方 Assets 下载 sysupgrade.bin，通过 uboot Web UI 刷入。' \
-            '' \
-            '> 由 GitHub Actions 自动构建' \
-            > release.txt
+          printf '## ImmortalWrt X1Pro Firmware\n\n'
+          printf '**设备:** Oray X1 Pro\n'
+          printf '**目标:** %s\n' "${{ env.TARGET_INPUT }}"
+          printf '**代理:** %s\n' "${{ env.PROXY }}"
+          printf '**分支:** openwrt-24.10-6.6\n'
+          if [ -n "${{ env.BUILD_NOTES }}" ]; then
+            printf '\n**备注:** %s\n' "${{ env.BUILD_NOTES }}"
+          fi
+          printf '\n## 固件\n'
+          for f in $GITHUB_WORKSPACE/firmware_collection/*.bin; do
+            [ -f "$f" ] || continue
+            printf '- %s (%s)\n' "$(basename "$f")" "$(du -h "$f" | cut -f1)"
+          done
+          printf '\n## 📥 下载\n\n'
+          printf '从下方 Assets 下载对应 sysupgrade.bin，通过 uboot Web UI 刷入。\n\n'
+          printf '> 由 GitHub Actions 自动构建\n'
+          > release.txt
 
           echo "status=success" >> $GITHUB_OUTPUT
 
-      - name: List sysupgrade files for release
-        id: list-files
-        if: steps.tag.outputs.status == 'success'
-        run: |
-          FIRMWARE_DIR="openwrt/bin/targets/mediatek/filogic"
-          SYSUPGRADE_FILES=$(ls "$FIRMWARE_DIR"/${FW_GLOB}*squashfs-sysupgrade.bin 2>/dev/null || true)
-          echo "Found sysupgrade files:"
-          echo "$SYSUPGRADE_FILES"
-          if [ -z "$SYSUPGRADE_FILES" ]; then
-            echo "WARNING: No sysupgrade files found!"
-            echo "contents=" >> $GITHUB_OUTPUT
-          else
-            echo "contents<<EOF" >> $GITHUB_OUTPUT
-            echo "$SYSUPGRADE_FILES" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
-
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
-        if: steps.list-files.outputs.contents != ''
+        if: steps.release.outputs.status == 'success'
         with:
-          tag_name: ${{ steps.tag.outputs.release_tag }}
+          tag_name: ${{ steps.release.outputs.release_tag }}
           body_path: release.txt
           prerelease: ${{ env.PRERELEASE == 'true' }}
           files: |
-            openwrt/bin/targets/mediatek/filogic/${FW_GLOB}*squashfs-sysupgrade.bin
+            firmware_collection/*sysupgrade.bin
 
       - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@v2
