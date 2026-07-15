@@ -115,14 +115,16 @@ jobs:
           FW_GLOB="*${T}*"
           echo "FW_GLOB=$FW_GLOB" >> $GITHUB_ENV
           case "$T" in
-            oray_x1pro-v1)            echo "CONFIG_BASE=config/128m" >> $GITHUB_ENV ;;
-            oray_x1pro-v1-ubootmod)  echo "CONFIG_BASE=config/128muboot" >> $GITHUB_ENV ;;
+            oray_x1pro-v1)            CONFIG_BASE="config/128m" ;;
+            oray_x1pro-v1-ubootmod)  CONFIG_BASE="config/128muboot" ;;
           esac
           if [ "${{ env.PROXY }}" = "none" ]; then
-            echo "CONFIG_FILE=${CONFIG_BASE}.config" >> $GITHUB_ENV
+            CONFIG_FILE="${CONFIG_BASE}.config"
           else
-            echo "CONFIG_FILE=${CONFIG_BASE}-${{ env.PROXY }}.config" >> $GITHUB_ENV
+            CONFIG_FILE="${CONFIG_BASE}-${{ env.PROXY }}.config"
           fi
+          echo "CONFIG_BASE=$CONFIG_BASE" >> $GITHUB_ENV
+          echo "CONFIG_FILE=$CONFIG_FILE" >> $GITHUB_ENV
           echo "Target: $T | Config: $CONFIG_FILE | FW: $FW_GLOB"
 
       - name: Check Server Performance
@@ -208,14 +210,16 @@ jobs:
           FW_GLOB="*${T}*"
           echo "FW_GLOB=$FW_GLOB" >> $GITHUB_ENV
           case "$T" in
-            oray_x1pro-v1)            echo "CONFIG_BASE=config/128m" >> $GITHUB_ENV ;;
-            oray_x1pro-v1-ubootmod)  echo "CONFIG_BASE=config/128muboot" >> $GITHUB_ENV ;;
+            oray_x1pro-v1)            CONFIG_BASE="config/128m" ;;
+            oray_x1pro-v1-ubootmod)  CONFIG_BASE="config/128muboot" ;;
           esac
           if [ "${{ env.PROXY }}" = "none" ]; then
-            echo "CONFIG_FILE=${CONFIG_BASE}.config" >> $GITHUB_ENV
+            CONFIG_FILE="${CONFIG_BASE}.config"
           else
-            echo "CONFIG_FILE=${CONFIG_BASE}-${{ env.PROXY }}.config" >> $GITHUB_ENV
+            CONFIG_FILE="${CONFIG_BASE}-${{ env.PROXY }}.config"
           fi
+          echo "CONFIG_BASE=$CONFIG_BASE" >> $GITHUB_ENV
+          echo "CONFIG_FILE=$CONFIG_FILE" >> $GITHUB_ENV
           echo "Target: $T | Config: $CONFIG_FILE | FW: $FW_GLOB"
 
       - name: Check Server Performance
