@@ -22,7 +22,7 @@ on:
           - 'passwall'
           - 'homeproxy'
       notes:
-        description: '编译备注（将写入 Release 页面）'
+        description: '编译备注（发布到 Release 页面）'
         required: false
         type: string
         default: ''
