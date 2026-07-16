@@ -11,14 +11,6 @@ on:
     types: [ "X1Pro Update" ]
   workflow_dispatch:
     inputs:
-      target:
-        description: '选择编译目标'
-        required: true
-        type: choice
-        default: 'oray_x1pro-v1'
-        options:
-          - 'oray_x1pro-v1'
-          - 'oray_x1pro-v1-ubootmod'
       proxy:
         description: '选择代理软件'
         required: false
