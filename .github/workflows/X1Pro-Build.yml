@@ -278,13 +278,25 @@ jobs:
           fi
 
           # 收集两个设备固件
+          # 注意：必须用精确 glob，避免 "oray_x1pro-v1" 误匹配到 "oray_x1pro-v1-ubootmod"
           for DEV in oray_x1pro-v1 oray_x1pro-v1-ubootmod; do
-            FW_GLOB="*${DEV}*"
-            SYSUPGRADE=$(find bin/targets -name "${FW_GLOB}*sysupgrade.bin" 2>/dev/null | head -1)
+            if [ "$DEV" = "oray_x1pro-v1" ]; then
+              FW_GLOB="*oray_x1pro-v1-squashfs-sysupgrade.bin"
+            else
+              FW_GLOB="*oray_x1pro-v1-ubootmod-squashfs-sysupgrade.bin"
+            fi
+            SYSUPGRADE=$(find bin/targets -name "$FW_GLOB" 2>/dev/null | head -1)
             if [ -z "$SYSUPGRADE" ]; then
-              echo "ERROR: No firmware for $DEV!"
-              find bin/targets -name "*.bin" 2>/dev/null | head -10
-              exit 1
+              # ubootmod 是主用固件（uboot 刷机），缺失则构建失败；
+              # 非 ubootmod 为 stock bootloader 备用固件，缺失仅告警跳过
+              if [ "$DEV" = "oray_x1pro-v1-ubootmod" ]; then
+                echo "ERROR: No firmware for $DEV!"
+                find bin/targets -name "*.bin" 2>/dev/null | head -10
+                exit 1
+              else
+                echo "WARN: 未生成 $DEV 固件（stock bootloader 备用），跳过。若仅用 uboot 刷机可忽略。"
+                continue
+              fi
             fi
             echo "Built: $SYSUPGRADE ($(du -h "$SYSUPGRADE" | cut -f1))"
             cp "$SYSUPGRADE" "$GITHUB_WORKSPACE/firmware_collection/"
@@ -331,24 +343,28 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "Release: $RELEASE_TAG"
 
-          printf '## ImmortalWrt X1Pro Firmware\n\n'
-          printf '**设备:** Oray X1 Pro\n'
-          printf '**目标:** %s\n' "${{ env.DEVICES }}"
-          printf '**代理:** %s\n' "${{ env.PROXY }}"
-          printf '**分支:** openwrt-24.10-6.6\n'
-          if [ -n "${{ env.BUILD_NOTES }}" ]; then
-            printf '\n**备注:** %s\n' "${{ env.BUILD_NOTES }}"
-          fi
-          printf '\n## 固件\n'
-          for f in $GITHUB_WORKSPACE/firmware_collection/*.bin; do
-            [ -f "$f" ] || continue
-            echo "- $(basename "$f") ($(du -h "$f" | cut -f1))"
-          done
-          printf '\n## 📥 下载\n\n'
-          printf '从下方 Assets 下载对应 sysupgrade.bin，通过 uboot Web UI 刷入。\n\n'
-          printf '> 由 GitHub Actions 自动构建\n'
-          > release.txt
+          # 将发布说明写入 release.txt（softprops/action-gh-release 用 body_path 读取）
+          {
+            printf '## ImmortalWrt X1Pro Firmware\n\n'
+            printf '**设备:** Oray X1 Pro\n'
+            printf '**目标:** %s\n' "${{ env.DEVICES }}"
+            printf '**代理:** %s\n' "${{ env.PROXY }}"
+            printf '**分支:** openwrt-24.10-6.6\n'
+            if [ -n "${{ env.BUILD_NOTES }}" ]; then
+              printf '\n**备注:** %s\n' "${{ env.BUILD_NOTES }}"
+            fi
+            printf '\n## 固件\n'
+            for f in $GITHUB_WORKSPACE/firmware_collection/*.bin; do
+              [ -f "$f" ] || continue
+              echo "- $(basename "$f") ($(du -h "$f" | cut -f1))"
+            done
+            printf '\n## 📥 下载\n\n'
+            printf '从下方 Assets 下载对应 sysupgrade.bin，通过 uboot Web UI 刷入。\n\n'
+            printf '> 由 GitHub Actions 自动构建\n'
+          } > release.txt
 
+          echo "=== release.txt ==="
+          cat release.txt
           echo "status=success" >> $GITHUB_OUTPUT
 
       - name: Upload to Release
