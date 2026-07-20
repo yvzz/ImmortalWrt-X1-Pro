@@ -40,11 +40,13 @@ jobs:
   # ════════════════════════════════════════════
   delete-tags:
     name: Delete Orphan Tags
+    needs: delete-releases
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # push 触发、勾选 do_tags、定时触发均运行
-    if: ${{ github.event_name == 'push' || inputs.do_tags || github.event_name == 'schedule' }}
+    # 在 Delete Old Releases 完成后执行：release 被删后其 tag 才变"孤立"，再清理才彻底
+    # 兼容 delete-releases 被 skipped 的场景（push 触发 / 未勾选 do_releases / 手动默认）
+    if: ${{ (github.event_name == 'push' || inputs.do_tags || github.event_name == 'schedule') && (needs.delete-releases.result == 'success' || needs.delete-releases.result == 'skipped') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
